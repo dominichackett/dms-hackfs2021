@@ -10,7 +10,7 @@ import { useHistory } from "react-router-dom";
 import logo from "./images/dms4.PNG";
 import { UserContext } from './UserContext';
 import { ThreeIdConnect,  EthereumAuthProvider } from '@3id/connect'
-import { PrivateKey,Client,ThreadID} from '@textile/hub'
+import { PrivateKey,Client,ThreadID,Users} from '@textile/hub'
 
 const KEY = 'kjzl6cwe1jw147nm36ho3uaiki0fm20tp38n53x6jf0ra345qatoyig1cu9wdag'
 
@@ -95,7 +95,9 @@ function LandingPage()
     uContext.value.did.setProvider(provider);
     await uContext.value.did.authenticate();
     const client =  await Client.withKeyInfo(info);
-    uContext.setDb(client);  
+    const user = await Users.withKeyInfo(info);
+    uContext.setDb(client);
+    uContext.setUser(user);  
    // await uContext.idx.remove(KEY);
     const jwe = await uContext.idx.get(KEY); //Get Stored Private Key to use with ceramic
     const pk = jwe ? await uContext.idx.ceramic.did.decryptJWE(jwe) : null;  //decryp private key 
@@ -108,9 +110,7 @@ const schemaAddressBook = {
   type: 'object',
   properties: {
     _id: { type: 'string' }, //Public Key is _id
-    alias:{type: 'string'}   //Person or entity associated with the public key
-    
-  },
+    alias:{type: 'string'}  },
 }
 
 const schemaVault = {
@@ -122,11 +122,31 @@ const schemaVault = {
     privateKey: { type: 'string' },
     alias:{type: 'string'},
     cid:{type:string},
-    trustee:{type:'array'} //Public Keys of the trustees comes from address book
-    
+    trustees:{type:'array'} //Public Keys of the trustees comes from address book
+    ,  //Person or entity associated with the public key
+    checkInInterval: {
+      type: 'number',
+      minimum: 1
+    } , //Number of Days between check in. Vault will be released to trustees if user fails to check in
+    sent:{
+        type: 'boolean'
+    }
   },
 }
 
+const schemaTrusteeVault = {
+  $schema: 'http://json-schema.org/draft-07/schema#',
+  title: 'TrusteeVault',
+  type: 'object',
+  properties: {
+    _id: { type: 'string' }, //Public Key is _id
+    alias:{type: 'string'},
+    privateKey: { type: 'string' },
+    alias:{type: 'string'},
+    cid:{type:string},
+     
+   },
+}
 
 
 
@@ -139,10 +159,12 @@ const schemaVault = {
       identity = PrivateKey.fromString(string);
       uContext.setPrivateKey(identity);
       await client.getToken(identity);
-      const threads = await client.listThreads();
+      await user.getToken(identity);
+      const threads = await client.listThreads(); 
       console.log(ThreadID.fromString(threads[0].id));
       uContext.setThreadid(ThreadID.fromString(threads[0].id));
-
+      await user.setupMailbox();
+      //
     }
     else
     {
@@ -156,15 +178,19 @@ const schemaVault = {
        await uContext.idx.set(KEY, jwe);
        uContext.setPrivateKey(identity);
        await client.getToken(identity);
+       await user.getToken(identity);
        const threadID = await client.newDB();
        uContext.setThreadid(threadID);
        await client.newCollection(threadID, {name: 'AddressBook', schema: schemaAddressBook});
        await client.newCollection(threadID, {name: 'Vault', schema: schemaVault});
-      
+       await client.newCollection(threadID, {name: 'TrusteeVault', schema: schemaTrusteeVault});
+
+       await user.setupMailbox();  
+       
 
 
     }
-
+   
 
    
   };  

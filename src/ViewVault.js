@@ -19,7 +19,7 @@ import { UserContext } from './UserContext';
 import Avatar from '@material-ui/core/Avatar';
 import LockIcon from '@material-ui/icons/Lock';
 import VaultImage from "./images/vault.png";
-import { PrivateKey} from '@textile/hub'
+import { PrivateKey,PublicKey} from '@textile/hub'
 import Dropzone from 'react-dropzone';
 import {useDropzone} from 'react-dropzone';
 import InputLabel from '@material-ui/core/InputLabel';
@@ -29,18 +29,33 @@ import FormControl from '@material-ui/core/FormControl';
 import Select from 'react-select'
 import AddressBook from './AddressBook';
 import { ErrorMessage } from '@hookform/error-message';
-
+import { Web3Storage } from 'web3.storage/dist/bundle.esm.min.js';
+import PageviewIcon from '@material-ui/icons/Pageview';
+import Table from '@material-ui/core/Table';
+import TableBody from '@material-ui/core/TableBody';
+import TableCell from '@material-ui/core/TableCell';
+import TableContainer from '@material-ui/core/TableContainer';
+import TableHead from '@material-ui/core/TableHead';
+import TableRow from '@material-ui/core/TableRow';
+import CloudDownloadIcon from '@material-ui/icons/CloudDownload';
+//const Web3Storage = require('web3.storage');
+//import {Web3Storage} from 'web3.storage';
 const useStyles = makeStyles((theme) => ({
    
     largeIcon: {
       width: 50,
       height: 50,
+      "color":"rgba(255, 201, 5, 1)"
+
     },
-    sousouIcon:{
-    width: 50,
-    height: 50,
-    color : "rgb(0, 0, 0)"
-},
+
+    downloadIcon: {
+      width: 50,
+      height: 50,
+
+    },
+   
+   
     root: {
         flexGrow: 1,
         paddingTop:"10px"
@@ -67,7 +82,8 @@ const useStyles = makeStyles((theme) => ({
       "fontFamily": "'Gordita', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',\n    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
       "WebkitFontSmoothing": "antialiased",
       "lineHeight": "1.5",
-     
+      "color":"rgba(255, 201, 5, 1)"
+
       },     
 
       formCreate: 
@@ -152,7 +168,24 @@ const useStyles = makeStyles((theme) => ({
    },
    error:{
        color:"#f44336"
+   },
+
+   tableHeader: {
+    "fontSize": "20px",
+  "fontWeight": "500",
+  "fontFamily": "'Gordita', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',\n    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
+  "WebkitFontSmoothing": "antialiased",
+  "lineHeight": "1.5",
+   },
+
+   tableText: {
+    "fontSize": "18px",
+  "fontWeight": "500",
+  "fontFamily": "'Gordita', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',\n    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
+  "WebkitFontSmoothing": "antialiased",
+  "lineHeight": "1.5",
    }
+
 
     
 }));
@@ -174,11 +207,17 @@ function ViewVault(props) {
     const [confirmDialogSeverity,setConfirmDialogSeverity] = useState("info");
     const [createSuccess, setCreateSuccess] = useState(false);
     const [selectedFiles,setSelectedFiles]  = useState();
+    const [fileInfo,setFileInfo]  = useState();
     const [trustees,setTrustees] = useState([]);
     const  uContext = useContext(UserContext);
     const {id} = useParams();
     const [isGettingVault,setIsGettingVault]  = useState(true);
+    const [filesUploaded,setFilesUploaded] = useState(false);
     const [myVault,setMyVault] = useState(null);
+    const [downloadLinks, setDownloadLinks] = useState([]);
+    const [filenames,setFileNames] = useState([]);
+    const [sentToTrustees,setSentToTrustees] = useState(false);
+    const action = useRef();
     
     //Get Address Book Data
      useEffect(()=>{
@@ -207,15 +246,26 @@ function ViewVault(props) {
                   {
                       setIsGettingVault(false);  
                       setValue("alias",vault.alias);
-                      setValue("trustees",vault.trustee);
+                      setValue("trustees",vault.trustees);
                       setMyVault(vault);
+                      console.log(vault);
+                      if(vault.cid != undefined && vault.cid != "" && vault.cid != null)
+                      {
+                          setFilesUploaded(true);
+                          getFilesFromWeb3Storage(vault);
+                      }
+
+                      if(vault.sent != undefined && vault.sent !="" && vault.sent != null)
+                      {
+                         setSentToTrustees(true);
+                      }
                   }
               } 
            }
        
         getVault();
         getAddressBookData();
-    },[uContext.db]);
+    },[uContext.db,filesUploaded]); 
    
     const handleSuccessClose = (event, reason) => {
         if (reason === 'clickaway') {
@@ -248,27 +298,203 @@ function ViewVault(props) {
            return;
         
         }
-        setCreateError(true); 
-        alert(JSON.stringify(data)); 
-        if(submitLabel == "Add")
-        setConfirmDialogMessage(`Create New Vault? `);
-        else
-        setConfirmDialogMessage('Update Vault Details?');
-
+        
+         
+        setConfirmDialogMessage(`Upload Files and Lock This Vault? `);
+        action.current = "Upload";
         setConfirmDialogSeverity("info");
         setConfirmMessageDialogOpen(true);  
       
        
       };
+
+     
+      async function getAsByteArray(file) {
+        return new Uint8Array(await readFile(file))
+      }
+
+      function readFile(file) {
+        return new Promise((resolve, reject) => {
+          // Create file reader
+          let reader = new FileReader()
+          // Register event listeners
+          reader.addEventListener("loadend", e => resolve(e.target.result))
+          reader.addEventListener("error", reject)
+          // Read file
+          reader.readAsArrayBuffer(file)
+        })
+      }
+
+      async function encryptFiles()
+      {
+          
+          var filesToUpload = [];
+          const publickey =  PublicKey.fromString(myVault._id); // Vault ID is Public Key
+          const privatekey = PrivateKey.fromString(myVault.privateKey);
+          for (const file of selectedFiles) //Get Selected File Data
+          {
+               const byteFile = await getAsByteArray(file);
+              // console.log(byteFile);
+
+               const data = await publickey.encrypt(byteFile);  //Encrypt File with Public Key
+             //  console.log(data);
+              // console.log(await privatekey.decrypt(data));
+               const f = new File([data], file.name, {
+                
+              });         
+            
+              console.log(new Blob(data))
+              filesToUpload.push(f) ; 
+            }
+                
+           upLoadFiles(filesToUpload);
+           
+      }
+
+      async function upLoadFiles(data)
+      {
+         const storage  =  new Web3Storage({ token:process.env.REACT_APP_WEB3_STORAGE_KEY });
+         const cid = await storage.put(data);
+         upDateVault(cid);
+  
+      }
+   
+
+      async function getFilesFromWeb3Storage(vault)
+      {
+        console.log(vault)
+        const privatekey = PrivateKey.fromString(vault.privateKey);
+        const storage  =  new Web3Storage({ token:process.env.REACT_APP_WEB3_STORAGE_KEY });
+        const res = await storage.get(vault.cid);
+        if (!res.ok) {
+         setCreateErroMessage("Error Downloading Encrypted Files From We3.Storage");
+         setCreateError(true);
+         return;
+        }
+
+        const web3Files = await res.files()
+        console.log(web3Files);
+        const links = [];
+        const fnames = [];
+        for (const file of web3Files) {
+          console.log(file);
+          console.log(`${file.cid} ${file.name} ${file.size}`)
+          const filedata = await file.arrayBuffer();
+           
+          console.log(new Uint8Array(filedata));
+          console.log(await privatekey.decrypt(new Uint8Array(filedata)))
+           // this part avoids memory leaks
+           //if (downloadLink !== '') window.URL.revokeObjectURL(downloadLink)
+
+          const data = await privatekey.decrypt(new Uint8Array(filedata));
+          // update the download link state
+          links.push(window.URL.createObjectURL(new Blob([data])));
+          fnames.push(file.name);
+        }
+
+        setFileNames(fnames);
+        setDownloadLinks(links);
+
+
+      }
+
+
+      async function sendVault()
+      {
+          
+         // console.log(myVault.trustees)
+         const msg = {vault:myVault._id,cid:myVault.cid,name:myVault.alias};
+         myVault.trustees.forEach(function(value)
+          {
+            //alert(`${value.value} Value`)
+              console.log(uContext.user); 
+            const encoded = new TextEncoder().encode(JSON.stringify(msg));
+            const identity = PublicKey.fromString(value.value);
+            uContext.user.sendMessage(uContext.privateKey, identity, encoded);
+          }
+          );
+
+
+          uContext.db.save(uContext.threadid,'Vault',[{_id:myVault._id,alias:myVault.alias,trustees:myVault.trustees,cid:myVault.cid,checkInInterval:myVault.checkInInterval,privateKey:myVault.privateKey,sent:true}])
+        .then(function(record){
+           
+            setCreateSuccessMessage("Your Vault Has Been Updated");
+            setCreateSuccess(true);
+            //setRefreshVault(new Date());
+          
+            setSentToTrustees(true);
+          })
+        .catch(function(err){
+            setCreateErroMessage("Error Updating Your Vault");
+            
+            setCreateError(true);
+        });
+
+      
+      }
+
+      const handleSendToTrustees = (data) => {
+        setConfirmDialogMessage(`Do You Want To Send This Vault To The Trustees? `);
+        action.current = "Send";
+        setConfirmDialogSeverity("info");
+        setConfirmMessageDialogOpen(true);
+
+      
+    }
+
+
+
+      function upDateVault(cid)
+      {
+        uContext.db.save(uContext.threadid,'Vault',[{_id:myVault._id,alias:getValues('alias'),trustees:getValues('trustees'),cid:cid,checkInInterval:getValues('checkInInterval'),privateKey:myVault.privateKey}])
+        .then(function(record){
+           
+            setCreateSuccessMessage("Your Vault Has Been Updated");
+            setCreateSuccess(true);
+            //setRefreshVault(new Date());
+            setSubmitLabel("Add");
+            setFilesUploaded(true);
+            reset();
+        })
+        .catch(function(err){
+            setCreateErroMessage("Error Updating Your Vault");
+            
+            setCreateError(true);
+        });
+
+      }
+
+      const handleConfirmDialogClose = (event, reason) => {
+        if (reason === 'clickaway') {
+          return;
+        }
+        console.log(event.target);
+        setConfirmMessageDialogOpen(false);
+
+        if(event.target.innerHTML =="Yes")
+        {
+          if(action.current == "Upload") 
+             encryptFiles();
+
+          if(action.current== "Send")
+            sendVault();
+        }
+        
+    };
+   
+
       const {acceptedFiles, getRootProps, getInputProps} = useDropzone();
       const files = (acceptedFiles) => {
-        const files = acceptedFiles.map(file => (
+          
+        const _files = acceptedFiles.map(file => (
             <span  className={classes.listText}> <li key={file.path}>
-            {file.path} - {file.size} bytes
+            {file.path} - {file.size} bytes - {file.type}  - Type
             </li>
             </span>
           ));
-
+      
+          console.log(acceptedFiles);
+          setFileInfo(_files);
           setSelectedFiles(acceptedFiles);
       } 
 
@@ -286,7 +512,7 @@ function ViewVault(props) {
           <Grid item xs={12} sm={12}>
           <InputLabel id="demo-simple-select-label">Name</InputLabel>
   
-            <Controller render={({field: {onChange,onBlur, value, name, ref },fieldState:{error}}) => (<TextField onChange={onChange} value={value} label="Alias"  fullWidth variant="outlined"  error={!!error}    helperText={error ? error.message : null}  
+            <Controller render={({field: {onChange,onBlur, value, name, ref },fieldState:{error}}) => (<TextField disabled={filesUploaded || isGettingVault} onChange={onChange} value={value} label="Alias"  fullWidth variant="outlined"  error={!!error}    helperText={error ? error.message : null}  
             />)} name="alias"  control={control}  rules={{required: 'Alias is required'}}  />
                
 
@@ -299,6 +525,7 @@ function ViewVault(props) {
             <Controller render={({field: {onChange,onBlur, value, name, ref },fieldState:{error}}) => (<Select  
             options={trustees}
             isMulti
+            isDisabled={filesUploaded || isGettingVault}
             onChange={onChange} value={value}
            label="Trustees"  fullWidth variant="outlined"  error={!!error}    helperText={error ? error.message : null}  
             >
@@ -309,12 +536,21 @@ function ViewVault(props) {
 
             </Grid>
 
-            
+            <Grid item xs={12} sm={6}>
+            <Controller render={({field: {onChange,value},fieldState:{error}}) => (
+                <TextField disabled={filesUploaded || isGettingVault} type ="number" onChange={onChange} value={value} label="Check In (Days)"  fullWidth variant="outlined"  error={!!error}    helperText={error ? error.message : null} 
+                />)} 
+                name="checkInInterval"  control={control}  
+                rules={{required: 'Check in interval is required',min:{value:1,message:'Minimum is 1 Day'}}}
+
+                />
+            </Grid>
+
       
             <Grid item xs={12} sm={12}>
             
            
-            <Dropzone onDrop={acceptedFiles => files(acceptedFiles)}>
+            <Dropzone onDrop={acceptedFiles => files(acceptedFiles)} disabled={filesUploaded || isGettingVault}>
             {({getRootProps, getInputProps}) => (       
          <section className={classes.filesDiv}>    
                <div {...getRootProps()}>
@@ -328,7 +564,7 @@ function ViewVault(props) {
 </Dropzone> 
      <aside>
         <h4 className={classes.listText}>Selected Files</h4>
-        <ul className={classes.listText}>{selectedFiles}</ul>
+        <ul className={classes.listText}>{fileInfo}</ul>
       </aside>
 </Grid>            
             <Grid item xs={6}>
@@ -338,7 +574,7 @@ function ViewVault(props) {
             variant="contained"
             color="primary"
             className={classes.submit}
-            disabled = {isGettingVault}
+            disabled = {isGettingVault || filesUploaded}
           >
            {submitLabel}
           </Button>
@@ -350,9 +586,10 @@ function ViewVault(props) {
             variant="contained"
             color="secondary"
             className={classes.submit}
-            
+            disabled = {isGettingVault || !filesUploaded || sentToTrustees}
+            onClick={() => handleSendToTrustees()}
           >
-           Reset
+           Send To Trustees
           </Button>
                 </Grid>
           </Grid>
@@ -379,6 +616,74 @@ function ViewVault(props) {
 
       </Paper>
       </Grid>
+      <Dialog
+        open={confirmMessageDialogOpen}
+        onClose={handleConfirmDialogClose}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">{"Information"}</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+           {confirmDialogMessage}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleConfirmDialogClose} color="primary" autoFocus  variant="contained">
+            No
+          </Button>
+          <Button onClick={handleConfirmDialogClose} color="secondary"  variant="contained">
+            Yes
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Grid item xs={12} sm={12}>
+             <Paper className={classes.paper}><div className={classes.addressHeader}>
+             <span className={classes.headerText}>View Vault Files</span> <PageviewIcon className={classes.largeIcon}/></div>
+             <div className={classes.formCreate}  >
+             <TableContainer className={classes.container}>
+    
+    <Table stickyHeader  aria-label="customized table">
+      <TableHead style={{ backgroundColor: 'blue' }}>
+        <TableRow>
+        <TableCell><span className={classes.tableHeader}>File Name</span></TableCell>
+          <TableCell  align="right"><span className={classes.tableHeader}>Download</span></TableCell>
+      
+        </TableRow>
+      </TableHead>
+      <TableBody>
+      
+
+             {downloadLinks.map((row,index) => (
+            <TableRow key={row.date} className={classes.tableRow}>
+            <TableCell  >
+             <span  className={classes.tableCellSecondary}> 
+            <span className={classes.tableText}>{filenames[index]}</span> 
+
+             </span>
+            </TableCell>
+            <TableCell align="right">
+            <a
+          // this attribute sets the filename
+          download={filenames[index]}
+          // link to the download URL
+          href={downloadLinks[index]}
+          target="_blank"
+        >
+          <CloudDownloadIcon className={classes.downloadIcon}/>
+
+        </a>
+      
+            </TableCell>
+      </TableRow>      
+
+            ))}
+     </TableBody>
+        </Table>
+       </TableContainer> 
+     </div>
+    </Paper>
+</Grid>    
      </div>        
     )
 }

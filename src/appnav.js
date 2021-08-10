@@ -61,9 +61,12 @@ export default function AppNav() {
   }
 
     const inboxMenu = () => {
-    history.push("/inbox");
+    history.push("/mailbox");
   }
-          
+    
+  const checkInMenu = () => {
+    history.push("/checkin");
+  }
   
   const addressBookMenu = () => {
     history.push("/addressbook");
@@ -80,6 +83,7 @@ export default function AppNav() {
           </Typography>
          
          
+          { (uContext.idx.ceramic.did.authenticated == true && <Button color="inherit" onClick={checkInMenu}>Check In</Button> ) }
 
           { (uContext.idx.ceramic.did.authenticated == true && <Button color="inherit" onClick={vaultMenu}>Vaults</Button> ) }
           { (uContext.idx.ceramic.did.authenticated == true &&   <Button color="inherit" onClick={inboxMenu}>Inbox</Button> )}

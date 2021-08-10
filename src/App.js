@@ -3,8 +3,6 @@ import './App.css';
 import{BrowserRouter as Router,Switch,Route} from 'react-router-dom';
 import Container from '@material-ui/core/Container';
 import  React, {useState}  from 'react';
-import CreateVault from './CreateVault';
-import EditAddress from './EditAddress';
 import LandingPage from './LandingPage';
 import ViewVault from './ViewVault';
 import AddressBook from './AddressBook';
@@ -16,7 +14,8 @@ import { UserContext } from './UserContext';
 import KeyDidResolver from 'key-did-resolver'
 import ThreeIdResolver from '@ceramicnetwork/3id-did-resolver'
 import { DID } from 'dids'
-import { green } from '@material-ui/core/colors';
+import TrusteeVault from './TrusteeVault';
+import CheckIn from './CheckIn';
 const { IDX } = require('@ceramicstudio/idx')
 
 const useStyles = makeStyles((theme) => ({
@@ -70,7 +69,7 @@ const Theme = {
 
   },
   text: {
-      primary:"rgba(255, 201, 5, 1)",
+      primary:"#000000",
      /* secondary: styles.tt,
       disabled: styles.ttt,
       hint: styles.tttt,*/
@@ -114,12 +113,12 @@ const [db,setDb]  =useState();
 const [idx,setIdx] = useState(new IDX({ ceramic }));
 const [privateKey,setPrivateKey] = useState(null);
 const [threadid,setThreadid] = useState();
-
+const [user,setUser] = useState();
   return (
     <div >
 
     <ThemeProvider theme={theme}>
-    <UserContext.Provider  value={{value:providerValue,setValue:setProviderValue,db:db,setDb:setDb,idx:idx,setIdx:setIdx,privateKey:privateKey,setPrivateKey:setPrivateKey,threadid:threadid,setThreadid:setThreadid}}>
+    <UserContext.Provider  value={{value:providerValue,setValue:setProviderValue,db:db,setDb:setDb,idx:idx,setIdx:setIdx,privateKey:privateKey,setPrivateKey:setPrivateKey,threadid:threadid,setThreadid:setThreadid,user:user,setUser:setUser}}>
 
     <Router>
      <Switch>
@@ -131,12 +130,13 @@ const [threadid,setThreadid] = useState();
 
   <Route exact path="/" component={LandingPage} />
   <Route exact path="/vaults" component={Vaults} />
-  <Route exact path="/createvault" component={CreateVault} />
+  <Route exact path="/checkin" component={CheckIn} />
+  <Route exact path="/trusteevault/:id" component={TrusteeVault} />
   <Route exact path="/mailbox" component={MailBox} />
   <Route exact path="/addressbook" component={AddressBook} />
 
-  <Route  path="/viewvault/:id" component={ViewVault} />
-  <Route  path="/editaddress/:id" component={EditAddress} />
+  <Route  exact path="/viewvault/:id" component={ViewVault} />
+  
 
   </Container>
  </div>

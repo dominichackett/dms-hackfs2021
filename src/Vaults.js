@@ -19,19 +19,17 @@ import { UserContext } from './UserContext';
 import Avatar from '@material-ui/core/Avatar';
 import LockIcon from '@material-ui/icons/Lock';
 import VaultImage from "./images/vault.png";
-import { PrivateKey} from '@textile/hub'
+import { PrivateKey,Query} from '@textile/hub'
 
 const useStyles = makeStyles((theme) => ({
    
     largeIcon: {
       width: 50,
       height: 50,
+      "color":"rgba(255, 201, 5, 1)"
+
     },
-    sousouIcon:{
-    width: 50,
-    height: 50,
-    color : "rgb(0, 0, 0)"
-},
+    
     root: {
         flexGrow: 1,
         paddingTop:"10px"
@@ -58,7 +56,7 @@ const useStyles = makeStyles((theme) => ({
       "fontFamily": "'Gordita', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',\n    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
       "WebkitFontSmoothing": "antialiased",
       "lineHeight": "1.5",
-     
+      "color":"rgba(255, 201, 5, 1)"
       },     
 
       formCreate: 
@@ -143,13 +141,14 @@ function Vaults() {
            console.log(uContext.db)
            if(uContext.db && uContext.threadid)
            { 
-              const found = await uContext.db.find(uContext.threadid, "Vault", {});
+              const query = new Query().orderByDesc("_mod");
+              const found = await uContext.db.find(uContext.threadid, "Vault", query);
               console.log(found);
               setVault(found);
            }
         }
         getVaultData();
-    },[uContext.db,refreshVault]);
+    },[uContext.db,uContext.threadid,refreshVault]);
 
     function deleteVault()
     {
