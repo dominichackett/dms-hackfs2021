@@ -1,24 +1,9 @@
 import React,{useState,useEffect,useContext} from 'react';
-import ContactsIcon from '@material-ui/icons/Contacts';
 import Grid from '@material-ui/core/Grid';
 import Paper from '@material-ui/core/Paper';
 import {   makeStyles } from '@material-ui/core/styles';
-import Dialog from '@material-ui/core/Dialog';
-import DialogActions from '@material-ui/core/DialogActions';
-import DialogContent from '@material-ui/core/DialogContent';
-import DialogContentText from '@material-ui/core/DialogContentText';
-import DialogTitle from '@material-ui/core/DialogTitle';
-import CreateIcon from '@material-ui/icons/Create';
-
-import {useForm ,Controller, set } from "react-hook-form";
-import Snackbar from '@material-ui/core/Snackbar';
-import MuiAlert from '@material-ui/lab/Alert';
-import TextField from '@material-ui/core/TextField';
 import Button from '@material-ui/core/Button';
 import { UserContext } from './UserContext';
-import PanToolIcon from '@material-ui/icons/PanTool';
-import Avatar from '@material-ui/core/Avatar';
-import VpnKeyIcon from '@material-ui/icons/VpnKey';
 import EmailIcon from '@material-ui/icons/Email';
 import Table from '@material-ui/core/Table';
 import TableBody from '@material-ui/core/TableBody';
@@ -27,7 +12,7 @@ import TableContainer from '@material-ui/core/TableContainer';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
 import { useHistory } from "react-router-dom";
-import { format,parseISO } from 'date-fns';
+import { format} from 'date-fns';
 
 const useStyles = makeStyles((theme) => ({
    
@@ -164,6 +149,7 @@ function MailBox() {
 
              console.log(obj);    
              _inbox.push(obj);         
+            // await uContext.user.deleteInboxMessage(id);
             }
             setInbox(_inbox);
         }

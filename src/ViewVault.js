@@ -7,8 +7,7 @@ import DialogActions from '@material-ui/core/DialogActions';
 import DialogContent from '@material-ui/core/DialogContent';
 import DialogContentText from '@material-ui/core/DialogContentText';
 import DialogTitle from '@material-ui/core/DialogTitle';
-import CreateIcon from '@material-ui/icons/Create';
-import { useHistory,useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 
 import {useForm ,Controller, set } from "react-hook-form";
 import Snackbar from '@material-ui/core/Snackbar';
@@ -16,18 +15,12 @@ import MuiAlert from '@material-ui/lab/Alert';
 import TextField from '@material-ui/core/TextField';
 import Button from '@material-ui/core/Button';
 import { UserContext } from './UserContext';
-import Avatar from '@material-ui/core/Avatar';
 import LockIcon from '@material-ui/icons/Lock';
-import VaultImage from "./images/vault.png";
 import { PrivateKey,PublicKey} from '@textile/hub'
 import Dropzone from 'react-dropzone';
 import {useDropzone} from 'react-dropzone';
 import InputLabel from '@material-ui/core/InputLabel';
-import MenuItem from '@material-ui/core/MenuItem';
-import FormHelperText from '@material-ui/core/FormHelperText';
-import FormControl from '@material-ui/core/FormControl';
 import Select from 'react-select'
-import AddressBook from './AddressBook';
 import { ErrorMessage } from '@hookform/error-message';
 import { Web3Storage } from 'web3.storage/dist/bundle.esm.min.js';
 import PageviewIcon from '@material-ui/icons/Pageview';
@@ -38,8 +31,9 @@ import TableContainer from '@material-ui/core/TableContainer';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
 import CloudDownloadIcon from '@material-ui/icons/CloudDownload';
-//const Web3Storage = require('web3.storage');
-//import {Web3Storage} from 'web3.storage';
+import Web3 from 'web3';
+import { DMS_ABI, DMS_CONTRACT } from './contract';
+
 const useStyles = makeStyles((theme) => ({
    
     largeIcon: {
@@ -218,7 +212,11 @@ function ViewVault(props) {
     const [filenames,setFileNames] = useState([]);
     const [sentToTrustees,setSentToTrustees] = useState(false);
     const action = useRef();
-    
+    const [dialogSeverity,setDialogSeverity] = useState("success");
+    const [messageDialogOpen,setMessageDialogOpen] = useState(false);
+    const [dialogMessage,setDialogMessage] = useState("");
+   
+   
     //Get Address Book Data
      useEffect(()=>{
         async function getAddressBookData()
@@ -353,6 +351,10 @@ function ViewVault(props) {
 
       async function upLoadFiles(data)
       {
+        setDialogMessage("Uploading Files Please Wait");
+        setDialogSeverity("info");
+        setMessageDialogOpen(true);
+       
          const storage  =  new Web3Storage({ token:process.env.REACT_APP_WEB3_STORAGE_KEY });
          const cid = await storage.put(data);
          upDateVault(cid);
@@ -362,7 +364,7 @@ function ViewVault(props) {
 
       async function getFilesFromWeb3Storage(vault)
       {
-        console.log(vault)
+        console.log(vault) 
         const privatekey = PrivateKey.fromString(vault.privateKey);
         const storage  =  new Web3Storage({ token:process.env.REACT_APP_WEB3_STORAGE_KEY });
         const res = await storage.get(vault.cid);
@@ -402,35 +404,64 @@ function ViewVault(props) {
       async function sendVault()
       {
           
-         // console.log(myVault.trustees)
+        const accounts = await window.ethereum.enable();
+        let web3 = new Web3(window.ethereum);
+        let dmsContract = new web3.eth.Contract(DMS_ABI,DMS_CONTRACT);
+        let keys = [];
+        let _trustees = [];
+        
          const msg = {vault:myVault._id,cid:myVault.cid,name:myVault.alias};
-         myVault.trustees.forEach(function(value)
+         for(const value of myVault.trustees)
+         
           {
-            //alert(`${value.value} Value`)
-              console.log(uContext.user); 
             const encoded = new TextEncoder().encode(JSON.stringify(msg));
             const identity = PublicKey.fromString(value.value);
-            uContext.user.sendMessage(uContext.privateKey, identity, encoded);
-          }
-          );
 
-
-          uContext.db.save(uContext.threadid,'Vault',[{_id:myVault._id,alias:myVault.alias,trustees:myVault.trustees,cid:myVault.cid,checkInInterval:myVault.checkInInterval,privateKey:myVault.privateKey,sent:true}])
-        .then(function(record){
-           
-            setCreateSuccessMessage("Your Vault Has Been Updated");
-            setCreateSuccess(true);
-            //setRefreshVault(new Date());
           
-            setSentToTrustees(true);
-          })
-        .catch(function(err){
-            setCreateErroMessage("Error Updating Your Vault");
-            
-            setCreateError(true);
-        });
+            const key = new TextEncoder().encode(myVault.privateKey); 
+            const encryptedKey = await identity.encrypt(key); //Encrypt Vault's private key with trustee's public key
+            _trustees.push(value.value);  //Public Key to identify trustee
+            keys.push(encryptedKey.toString());
+            uContext.user.sendMessage(uContext.privateKey, identity, encoded);
+            var string = new TextDecoder().decode(encryptedKey);
+            console.log(encryptedKey.toString())
 
+          }
+          console.log(_trustees)
+          console.log(keys)
+          //Duration set for day
+          const duration = parseInt(myVault.checkInInterval)*86400;
+
+           
+        console.log(_trustees)
+        setDialogMessage("Awaiting User Approval and Confirmations");
+        setDialogSeverity("info");
+        setMessageDialogOpen(true);
+       
+             dmsContract.methods.createVault(_trustees,myVault._id,keys,duration.toString()).send({from:accounts[0],gasLimit:3000000})
+          .on('receipt', function(receipt){
+            uContext.db.save(uContext.threadid,'Vault',[{_id:myVault._id,alias:myVault.alias,trustees:myVault.trustees,cid:myVault.cid,checkInInterval:myVault.checkInInterval,privateKey:myVault.privateKey,sent:true}])
+            .then(function(record){
+               
+                setCreateSuccessMessage("Your Vault Has Been Sent To Your Trustee(s)");
+                setCreateSuccess(true);
+                //setRefreshVault(new Date());
+              
+                setSentToTrustees(true);
+              })
+            .catch(function(err){
+                setCreateErroMessage("Error Updating Your Vault"+err.message);
+                
+                setCreateError(true);
+            });
       
+          }).on('error', function(error, receipt) { 
+            setCreateErroMessage("Error Send Your Vault"+error.message);
+                
+            setCreateError(true);
+          });    
+
+            
       }
 
       const handleSendToTrustees = (data) => {
@@ -446,18 +477,18 @@ function ViewVault(props) {
 
       function upDateVault(cid)
       {
-        uContext.db.save(uContext.threadid,'Vault',[{_id:myVault._id,alias:getValues('alias'),trustees:getValues('trustees'),cid:cid,checkInInterval:getValues('checkInInterval'),privateKey:myVault.privateKey}])
+        uContext.db.save(uContext.threadid,'Vault',[{_id:myVault._id,alias:getValues('alias'),trustees:getValues('trustees'),cid:cid,checkInInterval:parseInt(getValues('checkInInterval')),privateKey:myVault.privateKey}])
         .then(function(record){
            
             setCreateSuccessMessage("Your Vault Has Been Updated");
             setCreateSuccess(true);
             //setRefreshVault(new Date());
-            setSubmitLabel("Add");
+          //  getFilesFromWeb3Storage(record);
             setFilesUploaded(true);
             reset();
         })
         .catch(function(err){
-            setCreateErroMessage("Error Updating Your Vault");
+            setCreateErroMessage("Error Updating Your Vault"+err.message);
             
             setCreateError(true);
         });
@@ -482,6 +513,13 @@ function ViewVault(props) {
         
     };
    
+    const handleDialogClose = (event, reason) => {
+      if (reason === 'clickaway') {
+        return;
+      }
+  
+      setMessageDialogOpen(false);
+    };  
 
       const {acceptedFiles, getRootProps, getInputProps} = useDropzone();
       const files = (acceptedFiles) => {
@@ -608,6 +646,13 @@ function ViewVault(props) {
                   {createErrorMessage}
                 </MuiAlert>
                </Snackbar>
+
+               <Snackbar open={messageDialogOpen} autoHideDuration={80000} onClose={handleDialogClose} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+                <MuiAlert onClose={handleDialogClose} severity={dialogSeverity} elevation={6} variant="filled"> 
+                {dialogMessage}
+                </MuiAlert>
+               </Snackbar>
+   
             </Grid>
           </Grid>
           
