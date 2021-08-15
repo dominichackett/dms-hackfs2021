@@ -25,6 +25,8 @@ import TableContainer from '@material-ui/core/TableContainer';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
 import CloudDownloadIcon from '@material-ui/icons/CloudDownload';
+import Web3 from 'web3';
+import { DMS_ABI, DMS_CONTRACT } from './contract';
 
 const useStyles = makeStyles((theme) => ({
    
@@ -199,29 +201,31 @@ function TrusteeVault(props) {
     const [gotAddressBook,setGotAddressBook]  = useState();
     const [vaultId,setVaultId] = useState();
     const [vaultStatus,setVaultStatus]  = useState("Locked");
+   
 
     //Get Inbox for current user
     useEffect(()=>{
         async function getTrusteeVault(vid)
         {
-            if(uContext.db && uContext.threadid)
+          setVaultId(vid);  
+          if(uContext.db && uContext.threadid)
             {
                 try
                 { 
                    const vault = await uContext.db.findByID(uContext.threadid,"TrusteeVault",vid);
-                   setVaultId(vault._id);
+                  
                    setMyVault(vault);
                    setIsGettingVault(false);
                    
                    if(vault.privateKey != undefined && vault.privateKey != "" && vault.privateKey != null)
                    {
                       setVaultStatus("Open");
-                      getFilesFromWeb3Storage(vault.cid);
+                      getFilesFromWeb3Storage(vault);
                    }
 
                 }catch(e)
                 {
-                   setVaultId(vid);
+                   
                    setVaultStatus("Locked");
                    setIsGettingVault(false);
                 }
@@ -257,7 +261,7 @@ function TrusteeVault(props) {
             getInbox();
         }
 
-    },[gotAddressBook]);
+    },[gotAddressBook,vaultStatus]);
   
 //Get Address Book Data
 useEffect(()=>{
@@ -341,30 +345,70 @@ useEffect(()=>{
       }
 
 
+      async function handleUnlockVault(){
+     
+        const accounts = await window.ethereum.enable();
+        let web3 = new Web3(window.ethereum);
+        let dmsContract = new web3.eth.Contract(DMS_ABI,DMS_CONTRACT);
+        console.log(vaultId);
+        console.log(uContext.privateKey.public.toString())
+        /*dmsContract.methods.getVaultKey(vaultId,uContext.privateKey.public.toString()).send({from:accounts[0]})
+        .on('receipt', function(receipt){
+          console.log(receipt);
+          setCreateSuccessMessage("We got the key");
+          setCreateSuccess(true);      
+        }).on('error', function(error, receipt) {
+          setCreateErroMessage("The Vault Is Still Lccked. Cannot Unlock Vault"+error.message);
+          setCreateError(true);
+  
+      });*/
 
+        dmsContract.methods.getVaultKey(vaultId,uContext.privateKey.public.toString()).call({from:accounts[0]})
+             .then( function(receipt){
+           console.log(receipt)
+           setCreateSuccessMessage("We got the Key 2");
+          setCreateSuccess(true);
+          upDateVault(receipt);
+                       
+             }).catch(function(error, receipt) { 
+               setCreateErroMessage("The Vault Is Still Lccked. Cannot Unlock Vault");
+               setCreateError(true);
+           
+             });    
+               
+   
+     }
+   
 
-      function upDateVault(cid)
+      async function upDateVault(key)
       {
-       /* uContext.db.save(uContext.threadid,'TrusteeVault',[{_id:myVault._id,alias:getValues('alias'),trustees:getValues('trustees'),cid:cid,checkInInterval:getValues('checkInInterval'),privateKey:myVault.privateKey}])
+        const myVault = inbox[id].vault;
+        const bytes = await uContext.privateKey.decrypt(new Uint8Array(key.split(",")));
+       
+       const decryptedKey = new TextDecoder().decode(bytes);
+       console.log(decryptedKey)
+       console.log(uContext.privateKey.decrypt(new Uint8Array(key.split(",")))) 
+       console.log(myVault)
+
+       const _vault = {_id:myVault.vault,alias:myVault.name,privateKey:decryptedKey,cid:myVault.cid};
+       console.log(_vault)
+     
+  uContext.db.create(uContext.threadid,'TrusteeVault',[_vault])
         .then(function(record){
            
             setCreateSuccessMessage("Your Vault Has Been Updated");
             setCreateSuccess(true);
-            //setRefreshVault(new Date());
-            setSubmitLabel("Add");
-            setFilesUploaded(true);
-            reset();
-        })
+            setVaultStatus("Open");
+         })
         .catch(function(err){
             setCreateErroMessage("Error Updating Your Vault");
             
             setCreateError(true);
         });
-*/
+
       }
 
-      const handleUnlockVault = () => {
-      }
+     
 
    
 

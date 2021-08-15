@@ -16,6 +16,7 @@ import ThreeIdResolver from '@ceramicnetwork/3id-did-resolver'
 import { DID } from 'dids'
 import TrusteeVault from './TrusteeVault';
 import CheckIn from './CheckIn';
+import Web3 from 'web3';
 const { IDX } = require('@ceramicstudio/idx')
 
 const useStyles = makeStyles((theme) => ({

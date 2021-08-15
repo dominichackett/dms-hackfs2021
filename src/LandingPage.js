@@ -3,7 +3,6 @@ import AccountBalanceWalletIcon from '@material-ui/icons/AccountBalanceWallet';
 import {   makeStyles } from '@material-ui/core/styles';
 import Grid from '@material-ui/core/Grid';
 import Paper from '@material-ui/core/Paper';
-import Avatar from '@material-ui/core/Avatar';
 import Snackbar from '@material-ui/core/Snackbar';
 import MuiAlert from '@material-ui/lab/Alert';
 import { useHistory } from "react-router-dom";
@@ -98,11 +97,23 @@ function LandingPage()
     const user = await Users.withKeyInfo(info);
     uContext.setDb(client);
     uContext.setUser(user);  
-   // await uContext.idx.remove(KEY);
+    //await uContext.idx.remove(KEY);
     const jwe = await uContext.idx.get(KEY); //Get Stored Private Key to use with ceramic
+    console.log(KEY) 
     const pk = jwe ? await uContext.idx.ceramic.did.decryptJWE(jwe) : null;  //decryp private key 
     let identity;
 
+
+        // Define an LastSeen schema
+        const schemaLastSeen = {
+          $schema: 'http://json-schema.org/draft-07/schema#',
+          title: 'LastSeen',
+          type: 'object',
+          properties: {
+            _id: { type: 'string' } //Public Key is _id
+             },
+        }
+        
         // Define an AddressBook schema
 const schemaAddressBook = {
   $schema: 'http://json-schema.org/draft-07/schema#',
@@ -142,7 +153,6 @@ const schemaTrusteeVault = {
     _id: { type: 'string' }, //Public Key is _id
     alias:{type: 'string'},
     privateKey: { type: 'string' },
-    alias:{type: 'string'},
     cid:{type:string},
      
    },
@@ -155,17 +165,18 @@ const schemaTrusteeVault = {
 
       var string = new TextDecoder().decode(pk);
 
-      console.log(string);
+     
       identity = PrivateKey.fromString(string);
       uContext.setPrivateKey(identity);
       await client.getToken(identity);
       await user.getToken(identity);
       const threads = await client.listThreads(); 
-      console.log(ThreadID.fromString(threads[0].id));
       uContext.setThreadid(ThreadID.fromString(threads[0].id));
+      
+    
       await user.setupMailbox();
       //
-    }
+    } 
     else
     {
        
@@ -184,6 +195,7 @@ const schemaTrusteeVault = {
        await client.newCollection(threadID, {name: 'AddressBook', schema: schemaAddressBook});
        await client.newCollection(threadID, {name: 'Vault', schema: schemaVault});
        await client.newCollection(threadID, {name: 'TrusteeVault', schema: schemaTrusteeVault});
+       await client.newCollection(threadID, {name: 'LastSeen', schema: schemaLastSeen});
 
        await user.setupMailbox();  
        
@@ -203,7 +215,7 @@ const schemaTrusteeVault = {
     setMessageDialogOpen(false);
   };
 console.log(uContext.PrivateKey);
- if(uContext.idx.ceramic.did.authenticated == true)
+ if(uContext.idx?.ceramic.did.authenticated == true)
  {
     history.push("/vaults");
  }

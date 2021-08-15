@@ -46,8 +46,14 @@ export default function AppNav() {
   
     const logoutMenu = () => {
         setAnchorEl(null);
-        uContext.value.close();
-       history.push("/");
+       uContext.setValue(null);
+       uContext.setDb(null);
+        uContext.setIdx(null);
+        uContext.setThreadid(null);
+        uContext.setUser(null);
+        uContext.value.did = null;
+       // uContext.idx.ceramic.did.authenticated = false;
+        history.push("/");
   
       };
   const profileMenu = () => {
